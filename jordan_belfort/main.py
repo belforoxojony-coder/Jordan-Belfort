@@ -61,7 +61,8 @@ class JordanBelfortSystem:
         FR-06 / NFR-02: Recuperação de Queda.
         Busca trades ativos no banco de dados e reassume o gerenciamento deles.
         """
-        logger.info("Iniciando verificação de recuperação pós-queda (Crash Recovery)...")
+        logger.info(f"Iniciando verificação de recuperação pós-queda (Crash Recovery)...")
+        logger.info(f"⚠️ STATUS DO BOT: {'ATIVO - FAZENDO TRADES!' if bot_config.status == 'active' else 'PAUSADO - Nenhuma operação será realizada'}")
         active_trades = self.db.get_active_trades()
         if not active_trades:
             logger.info("Nenhum trade órfão encontrado. Sistema pronto.")
@@ -127,6 +128,13 @@ class JordanBelfortSystem:
             if df is not None and not df.empty:
                 current_price = float(df["close"].iloc[-1])
 
+        # Detecta confluência explícita para passar ao LLM
+        rsi = technical_indicators.get("rsi_15m", 50.0)
+        macd_trend = technical_indicators.get("macd_trend", "neutral")
+        polarity = social_sentiment.get("sentiment_polarity", 0.5)
+        
+        confluence_detected = (rsi <= 32 or rsi >= 68) or ("crossover" in macd_trend or "bullish" in macd_trend or "bearish" in macd_trend) or (polarity > 0.65 or polarity < 0.35)
+
         payload = {
             "timestamp": int(time.time() * 1000),
             "pair": pair,
@@ -134,7 +142,14 @@ class JordanBelfortSystem:
             "technical_indicators": technical_indicators,
             "market_structure": market_structure,
             "social_sentiment": social_sentiment,
-            "on_chain_flow": on_chain_flow
+            "on_chain_flow": on_chain_flow,
+            "confluence_detected": confluence_detected,
+            "confluence_summary": {
+                "rsi_level": "sobrecompra" if rsi >= 68 else ("sobrevenda" if rsi <= 32 else "neutral"),
+                "rsi_value": rsi,
+                "macd_status": macd_trend,
+                "sentiment_polarity": polarity
+            }
         }
         
         # Salva o sinal recebido no banco de dados para auditoria histórica

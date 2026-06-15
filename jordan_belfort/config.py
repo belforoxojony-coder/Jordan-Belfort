@@ -40,7 +40,7 @@ class BotConfig:
         self.santiment_api_key = os.getenv("SANTIMENT_API_KEY", "").strip()
         
         # Cache de Configurações Dinâmicas (para evitar leituras frequentes ao banco)
-        self._status = "paused"
+        self._status = "active"  # Inicia em ATIVO para começar a fazer trades imediatamente
         self._risk_percentage = 1.0
         self._max_exposure_percentage = 5.0
         self._leverage = 1  # BLOQUEADO EM 1x – alavancagem zero

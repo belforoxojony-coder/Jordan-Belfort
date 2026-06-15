@@ -120,7 +120,9 @@ class JordanBelfort:
             "/status - Verifica o status do bot\n"
             "/pausar - Ativa o Kill Switch global\n"
             "/resumir - Retoma as operações de trading\n"
+            "/iniciar - Alias para /resumir (inicia trading)\n"
             "/posicoes - Lista posições ativas\n"
+
             "/saldo - Consulta saldo disponível\n"
             "/relatorio - Resumo completo de performance\n"
             "/ajuda - Mostra esta mensagem\n\n"
@@ -149,9 +151,13 @@ class JordanBelfort:
         logger.info("Sistema retomado via Telegram.")
         await update.message.reply_text(
             self.format_with_wolf_persona(
-                "SISTEMA ATIVADO! Soltem os cães! Voltamos ao jogo e vamos pegar o mercado pelo pescoço!"
+                "SISTEMA ATIVADO! Soltem os cães! Voltamos ao jogo e vamos pegar o mercado pelo pescoço! 🐺🚀💰"
             )
         )
+
+    async def cmd_iniciar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Alias para cmd_resumir - inicia o trading."""
+        await self.cmd_resumir(update, context)
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._is_authorized(update):
@@ -299,6 +305,7 @@ class JordanBelfort:
             self.app.add_handler(CommandHandler("start", self.cmd_start))
             self.app.add_handler(CommandHandler("pausar", self.cmd_pausar))
             self.app.add_handler(CommandHandler("resumir", self.cmd_resumir))
+            self.app.add_handler(CommandHandler("iniciar", self.cmd_iniciar))
             self.app.add_handler(CommandHandler("status", self.cmd_status))
             self.app.add_handler(CommandHandler("posicoes", self.cmd_posicoes))
             self.app.add_handler(CommandHandler("saldo", self.cmd_saldo))
