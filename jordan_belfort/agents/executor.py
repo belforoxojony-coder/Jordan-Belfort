@@ -18,14 +18,24 @@ class Executor:
         self.db = Database()
         self.paper_trading = True
         self.exchange: Optional[ccxt.binance] = None
+        self.last_balance_fetch_error = None
 
         # Verifica se as chaves da Binance são válidas
         has_keys = (
             bot_config.binance_api_key and 
-            bot_config.binance_api_key != "your_binance_api_key_here" and
+            bot_config.binance_api_key.strip() and
             bot_config.binance_api_secret and 
-            bot_config.binance_api_secret != "your_binance_api_secret_here"
+            bot_config.binance_api_secret.strip()
         )
+
+        logger.info("=" * 80)
+        logger.info("INICIALIZAÇÃO DO EXECUTOR")
+        logger.info("=" * 80)
+        logger.info(f"Credenciais presentes: {has_keys}")
+        logger.info(f"Comprimento da API Key: {len(bot_config.binance_api_key) if bot_config.binance_api_key else 0}")
+        logger.info(f"Comprimento da API Secret: {len(bot_config.binance_api_secret) if bot_config.binance_api_secret else 0}")
+        logger.info(f"Modo Testnet: {bot_config.binance_use_testnet}")
+        logger.info("=" * 80)
 
         if has_keys:
             try:
@@ -53,42 +63,74 @@ class Executor:
                 if bot_config.binance_use_testnet:
                     self.exchange.set_sandbox_mode(True)
                 
-                # Testa conexão buscando saldos
-                self.exchange.fetch_balance()
-                self.paper_trading = False
-                logger.info(
-                    f"Executor conectado à API Real da Binance "
-                    f"({'Testnet' if bot_config.binance_use_testnet else 'Produção'})."
-                )
+                # Testa conexão buscando saldos com retry
+                try:
+                    balance = self.exchange.fetch_balance()
+                    usdt_balance = balance.get('USDT', {}).get('free', 0.0)
+                    self.paper_trading = False
+                    logger.info(
+                        f"✅ EXECUTOR CONECTADO À API REAL DA BINANCE "
+                        f"({'Testnet' if bot_config.binance_use_testnet else 'Produção'})."
+                    )
+                    logger.info(f"   Saldo USDT disponível: {usdt_balance:.2f}")
+                except ccxt.AuthenticationError as ae:
+                    logger.error(f"❌ ERRO DE AUTENTICAÇÃO: Chaves inválidas ou expiradas: {ae}")
+                    self.paper_trading = True
+                    self.last_balance_fetch_error = str(ae)
+                except ccxt.NetworkError as ne:
+                    logger.error(f"❌ ERRO DE REDE: Não foi possível conectar à Binance: {ne}")
+                    self.paper_trading = True
+                    self.last_balance_fetch_error = str(ne)
+                except Exception as e:
+                    logger.error(f"❌ ERRO DE CONEXÃO: {e}")
+                    self.paper_trading = True
+                    self.last_balance_fetch_error = str(e)
             except Exception as e:
-                logger.error(f"Erro ao conectar com a exchange real: {e}. Entrando em modo Paper Trading por segurança.")
+                logger.error(f"❌ ERRO AO INICIALIZAR CCXT: {e}")
                 self.paper_trading = True
+                self.last_balance_fetch_error = str(e)
         else:
-            logger.info("Credenciais da Binance ausentes ou padrão. Ativando modo Paper Trading (Simulado).")
+            logger.warning("⚠️  CREDENCIAIS DA BINANCE AUSENTES. ATIVANDO MODO PAPER TRADING.")
             self.paper_trading = True
 
     def get_balance(self) -> float:
         """
         Busca o saldo disponível em USDT.
-        No modo Paper Trading, gerencia o saldo local no banco de dados.
+        Tenta a API real primeiro, fallback para paper trading se necessário.
         """
-        if self.paper_trading:
-            # Pega saldo fictício do banco de dados (padrão 10.000 USDT)
-            balance = self.db.get_config("paper_balance", 10000.0)
-            return float(balance)
+        if not self.paper_trading and self.exchange:
+            try:
+                balance_data = self.exchange.fetch_balance()
+                # Retorna saldo total/disponível em USDT ou USDC
+                usdt_balance = balance_data.get('USDT', {}).get('free', 0.0)
+                if usdt_balance == 0.0:
+                    # Fallback para saldo total se free for zero
+                    usdt_balance = balance_data.get('USDT', {}).get('total', 0.0)
+                logger.debug(f"Saldo real obtido da Binance: {usdt_balance:.2f} USDT")
+                return float(usdt_balance)
+            except ccxt.AuthenticationError as ae:
+                logger.error(f"Erro de autenticação ao obter saldo: {ae}")
+                self.last_balance_fetch_error = str(ae)
+                # Fallback para paper trading
+                balance = self.db.get_config("paper_balance", 10000.0)
+                return float(balance)
+            except ccxt.NetworkError as ne:
+                logger.error(f"Erro de rede ao obter saldo: {ne}")
+                self.last_balance_fetch_error = str(ne)
+                # Fallback para paper trading
+                balance = self.db.get_config("paper_balance", 10000.0)
+                return float(balance)
+            except Exception as e:
+                logger.error(f"Erro ao obter saldo real na Binance: {e}")
+                self.db.log_audit("ERROR", f"Erro ao consultar saldo real: {e}")
+                # Fallback para paper trading
+                balance = self.db.get_config("paper_balance", 10000.0)
+                return float(balance)
         
-        try:
-            balance_data = self.exchange.fetch_balance()
-            # Retorna saldo total/disponível em USDT ou USDC
-            usdt_balance = balance_data.get('USDT', {}).get('free', 0.0)
-            if usdt_balance == 0.0:
-                # Fallback para saldo total se free for zero
-                usdt_balance = balance_data.get('USDT', {}).get('total', 0.0)
-            return float(usdt_balance)
-        except Exception as e:
-            logger.error(f"Erro ao obter saldo real na Binance: {e}")
-            self.db.log_audit("ERROR", f"Erro ao consultar saldo real: {e}")
-            return 0.0
+        # Modo paper trading ou sem exchange
+        balance = self.db.get_config("paper_balance", 10000.0)
+        logger.debug(f"Usando saldo de paper trading: {balance:.2f} USDT")
+        return float(balance)
 
     def place_order(self, validated_payload: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
         """

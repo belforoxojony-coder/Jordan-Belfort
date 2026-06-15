@@ -5,7 +5,11 @@ from dotenv import load_dotenv
 from jordan_belfort.database import Database
 
 logger = logging.getLogger("Config")
-load_dotenv()
+# Carrega .env apenas se existir (não falha se não existir - importante para Railway)
+try:
+    load_dotenv()
+except Exception as e:
+    logger.warning(f"Não foi possível carregar .env (normal no Railway): {e}")
 
 class BotConfig:
     """
@@ -15,16 +19,11 @@ class BotConfig:
     def __init__(self):
         self.db = Database()
         
-        # Chaves de API e Variáveis Estáticas (obtidas apenas do .env)
+        # Chaves de API e Variáveis Estáticas (obtidas do .env ou Railway env vars)
         self.binance_api_key = os.getenv("BINANCE_API_KEY", "").strip()
         self.binance_api_secret = os.getenv("BINANCE_API_SECRET", "").strip()
         raw_use_testnet = os.getenv("BINANCE_USE_TESTNET", "true").lower().strip()
         self.binance_use_testnet = raw_use_testnet != "false"
-        if raw_use_testnet == "false":
-            logger.warning(
-                "BINANCE_USE_TESTNET definido como false, mas o modo real da conta NÃO será usado. "
-                "O bot permanece em modo Testnet por segurança."
-            )
         self.binance_testnet_url = os.getenv("BINANCE_TESTNET_URL", "https://testnet.binance.vision/api").strip()
         
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
@@ -45,13 +44,27 @@ class BotConfig:
         self._max_exposure_percentage = 5.0
         self._leverage = 1  # BLOQUEADO EM 1x – alavancagem zero
         
+        # Log de diagnóstico das credenciais
+        logger.info("=" * 80)
+        logger.info("DIAGNÓSTICO DE CREDENCIAIS DA BINANCE")
+        logger.info("=" * 80)
+        logger.info(f"BINANCE_API_KEY presente: {bool(self.binance_api_key)}")
+        if self.binance_api_key:
+            logger.info(f"  └─ Primeiros 8 caracteres: {self.binance_api_key[:8]}...")
+        logger.info(f"BINANCE_API_SECRET presente: {bool(self.binance_api_secret)}")
+        if self.binance_api_secret:
+            logger.info(f"  └─ Primeiros 8 caracteres: {self.binance_api_secret[:8]}...")
+        logger.info(f"BINANCE_USE_TESTNET: {self.binance_use_testnet}")
+        logger.info(f"BINANCE_TESTNET_URL: {self.binance_testnet_url}")
+        logger.info("=" * 80)
+        
         # Sincroniza imediatamente no início
         self.sync_configs()
 
     def sync_configs(self):
         """Lê os parâmetros do banco de dados e atualiza o cache local."""
         try:
-            self._status = self.db.get_config("status", "paused")
+            self._status = self.db.get_config("status", "active")
             self._risk_percentage = float(self.db.get_config("risk_percentage", 1.0))
             self._max_exposure_percentage = float(self.db.get_config("max_exposure_percentage", 5.0))
             # Alavancagem SEMPRE é mantida em 1x. Grava no banco para garantir consistência.

@@ -61,11 +61,31 @@ class JordanBelfortSystem:
         FR-06 / NFR-02: Recuperação de Queda.
         Busca trades ativos no banco de dados e reassume o gerenciamento deles.
         """
+        logger.info("=" * 80)
+        logger.info("INICIALIZAÇÃO DO SISTEMA JORDAN BELFORT")
+        logger.info("=" * 80)
+        
+        # Health check do executor
+        logger.info("VERIFICAÇÃO DE CONECTIVIDADE")
+        logger.info("-" * 80)
+        
+        if self.executor.paper_trading:
+            logger.warning("⚠️  EXECUTOR EM MODO PAPER TRADING (SIMULADO)")
+            if self.executor.last_balance_fetch_error:
+                logger.error(f"   Motivo do erro: {self.executor.last_balance_fetch_error}")
+            logger.warning(f"   Saldo fictício: {self.executor.get_balance():.2f} USDT")
+        else:
+            logger.info("✅ EXECUTOR CONECTADO À API REAL DA BINANCE")
+            logger.info(f"   Modo: {'TESTNET' if bot_config.binance_use_testnet else 'PRODUÇÃO'}")
+            logger.info(f"   Saldo Real: {self.executor.get_balance():.2f} USDT")
+        
+        logger.info(f"STATUS DO BOT: {'🟢 ATIVO - FAZENDO TRADES!' if bot_config.status == 'active' else '🔴 PAUSADO - Nenhuma operação será realizada'}")
+        logger.info("=" * 80)
+        
         logger.info(f"Iniciando verificação de recuperação pós-queda (Crash Recovery)...")
-        logger.info(f"⚠️ STATUS DO BOT: {'ATIVO - FAZENDO TRADES!' if bot_config.status == 'active' else 'PAUSADO - Nenhuma operação será realizada'}")
         active_trades = self.db.get_active_trades()
         if not active_trades:
-            logger.info("Nenhum trade órfão encontrado. Sistema pronto.")
+            logger.info("Nenhum trade órfão encontrado. Sistema pronto para operar.")
             return
 
         logger.warning(f"Encontrado(s) {len(active_trades)} trade(s) órfão(s) no banco de dados! Reassumindo gerenciamento...")
