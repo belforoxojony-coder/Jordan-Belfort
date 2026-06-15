@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import ccxt.pro as ccxtpro
 import ccxt
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from jordan_belfort.config import bot_config
 
 logger = logging.getLogger("Grafista")
