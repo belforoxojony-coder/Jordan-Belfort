@@ -176,17 +176,28 @@ class Database:
     # --- Notifications Methods ---
     def save_notification(self, channel: str, message: str, metadata: Optional[Dict] = None) -> Optional[int]:
         if self.client:
+            payload = {
+                "timestamp": int(__import__("time").time() * 1000),
+                "channel": channel,
+                "message": message,
+                "metadata": metadata or {}
+            }
             try:
-                payload = {
-                    "timestamp": int(__import__("time").time() * 1000),
-                    "channel": channel,
-                    "message": message,
-                    "metadata": metadata or {}
-                }
                 res = self.client.table("notifications").insert(payload).execute()
                 if res.data:
                     return res.data[0]["id"]
             except Exception as e:
+                error_text = str(e)
+                if isinstance(e, dict):
+                    error_text = str(e)
+                if "Could not find the table 'public.notifications'" in error_text or "PGRST205" in error_text:
+                    logger.warning("Tabela notifications não encontrada no Supabase. Salvando notificação em audit_logs como fallback.")
+                    self.log_audit(
+                        level="NOTIFICATION",
+                        message=message,
+                        details={"channel": channel, "metadata": metadata or {}}
+                    )
+                    return None
                 logger.error(f"Erro ao salvar notificação no Supabase: {e}")
                 raise
         raise RuntimeError("Conexão com Supabase indisponível para salvar notificação.")
@@ -194,9 +205,26 @@ class Database:
     def get_recent_notifications(self, limit: int = 10) -> List[Dict]:
         if self.client:
             try:
-                res = self.client.table("notifications").select("*").order("timestamp", {"ascending": false}).limit(limit).execute()
+                res = self.client.table("notifications").select("*").order("timestamp", {"ascending": False}).limit(limit).execute()
                 return res.data or []
             except Exception as e:
+                error_text = str(e)
+                if isinstance(e, dict):
+                    error_text = str(e)
+                if "Could not find the table 'public.notifications'" in error_text or "PGRST205" in error_text:
+                    logger.warning("Tabela notifications não encontrada no Supabase. Lendo notificações de audit_logs como fallback.")
+                    res = self.client.table("audit_logs").select("id,timestamp,message,details").eq("level", "NOTIFICATION").order("timestamp", {"ascending": False}).limit(limit).execute()
+                    notifications = []
+                    if res.data:
+                        for row in res.data:
+                            notifications.append({
+                                "id": row.get("id"),
+                                "timestamp": row.get("timestamp"),
+                                "message": row.get("message"),
+                                "channel": row.get("details", {}).get("channel", "notification"),
+                                "metadata": row.get("details", {}).get("metadata", {})
+                            })
+                    return notifications
                 logger.error(f"Erro ao obter notificações do Supabase: {e}")
                 raise
         raise RuntimeError("Conexão com Supabase indisponível para obter notificações.")

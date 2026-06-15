@@ -166,6 +166,7 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [notificationsTableExists, setNotificationsTableExists] = useState(null);
   const [metrics, setMetrics] = useState({ totalPnl: 0, winRate: 0, totalTrades: 0, bestTrade: 0, worstTrade: 0 });
 
   const processData = useCallback((trades) => {
@@ -191,6 +192,47 @@ export default function Dashboard() {
     setLastUpdate(new Date());
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        throw error;
+      }
+
+      setNotificationsTableExists(true);
+      return data || [];
+    } catch (err) {
+      const message = err?.message || String(err);
+      if (message.includes("Could not find the table 'public.notifications'") || message.includes('PGRST205')) {
+        setNotificationsTableExists(false);
+        const { data, error: fallbackError } = await supabase
+          .from('audit_logs')
+          .select('id,timestamp,message,details')
+          .eq('level', 'NOTIFICATION')
+          .order('timestamp', { ascending: false })
+          .limit(10);
+
+        if (fallbackError) {
+          throw fallbackError;
+        }
+
+        return (data || []).map((row) => ({
+          id: row.id,
+          timestamp: row.timestamp,
+          message: row.message,
+          channel: row.details?.channel || 'notification',
+          metadata: row.details?.metadata || {}
+        }));
+      }
+      throw err;
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) {
       processData(MOCK_TRADES);
@@ -199,21 +241,23 @@ export default function Dashboard() {
     }
     setLoading(true);
     try {
-      const [{ data: trades, error: tradesError }, { data: notificationsData, error: notificationsError }] = await Promise.all([
+      const [{ data: trades, error: tradesError }, notificationsData] = await Promise.all([
         supabase.from('trades').select('*').order('entry_time', { ascending: false }),
-        supabase.from('notifications').select('*').order('timestamp', { ascending: false }).limit(10)
+        fetchNotifications()
       ]);
 
       if (tradesError) throw tradesError;
-      if (notificationsError) throw notificationsError;
       if (trades) processData(trades);
       if (notificationsData) setNotifications(notificationsData);
     } catch (err) {
       console.error('Supabase fetch error:', err);
+      if (err?.message?.includes('Could not find the table') || String(err).includes('PGRST205')) {
+        setNotificationsTableExists(false);
+      }
     } finally {
       setLoading(false);
     }
-  }, [processData]);
+  }, [fetchNotifications, processData]);
 
   useEffect(() => {
     fetchData();
@@ -224,16 +268,25 @@ export default function Dashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, fetchData)
       .subscribe();
 
-    const notificationsChannel = supabase
-      .channel('notifications-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, fetchData)
-      .subscribe();
+    let notificationsChannel = null;
+    if (notificationsTableExists !== null) {
+      notificationsChannel = supabase
+        .channel('notifications-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: notificationsTableExists === false ? 'audit_logs' : 'notifications' },
+          fetchData
+        )
+        .subscribe();
+    }
 
     return () => {
       supabase.removeChannel(tradesChannel);
-      supabase.removeChannel(notificationsChannel);
+      if (notificationsChannel) {
+        supabase.removeChannel(notificationsChannel);
+      }
     };
-  }, [fetchData]);
+  }, [fetchData, notificationsTableExists]);
 
   const chartData = [...closedTrades].reverse().reduce((acc, t, i) => {
     const prev = i === 0 ? 0 : acc[i - 1].cumPnl;
