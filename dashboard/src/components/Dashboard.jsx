@@ -163,6 +163,7 @@ const MOCK_TRADES = [
 export default function Dashboard() {
   const [activeTrades, setActiveTrades] = useState([]);
   const [closedTrades, setClosedTrades] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [metrics, setMetrics] = useState({ totalPnl: 0, winRate: 0, totalTrades: 0, bestTrade: 0, worstTrade: 0 });
@@ -198,10 +199,15 @@ export default function Dashboard() {
     }
     setLoading(true);
     try {
-      const { data: trades, error } = await supabase
-        .from('trades').select('*').order('entry_time', { ascending: false });
-      if (error) throw error;
+      const [{ data: trades, error: tradesError }, { data: notificationsData, error: notificationsError }] = await Promise.all([
+        supabase.from('trades').select('*').order('entry_time', { ascending: false }),
+        supabase.from('notifications').select('*').order('timestamp', { ascending: false }).limit(10)
+      ]);
+
+      if (tradesError) throw tradesError;
+      if (notificationsError) throw notificationsError;
       if (trades) processData(trades);
+      if (notificationsData) setNotifications(notificationsData);
     } catch (err) {
       console.error('Supabase fetch error:', err);
     } finally {
@@ -212,15 +218,23 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
     if (!isSupabaseConfigured || !supabase) return;
-    const channel = supabase
+
+    const tradesChannel = supabase
       .channel('trades-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, fetchData)
       .subscribe();
-    return () => supabase.removeChannel(channel);
+
+    const notificationsChannel = supabase
+      .channel('notifications-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, fetchData)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tradesChannel);
+      supabase.removeChannel(notificationsChannel);
+    };
   }, [fetchData]);
 
-
-  // Build cumulative PnL chart data
   const chartData = [...closedTrades].reverse().reduce((acc, t, i) => {
     const prev = i === 0 ? 0 : acc[i - 1].cumPnl;
     acc.push({
@@ -332,6 +346,28 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
         )}
+      </div>
+
+      {/* Notification Events */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 p-5 border-b border-slate-800">
+          <AlertCircle className="w-5 h-5 text-slate-400" />
+          <h2 className="text-base font-semibold text-slate-100">Notificações Recentes</h2>
+          <span className="ml-auto text-xs text-slate-500">Últimas {notifications.length} mensagens</span>
+        </div>
+        <div className="p-5 space-y-3">
+          {notifications.length === 0 ? (
+            <div className="text-slate-500 text-sm">Nenhuma notificação disponível no momento.</div>
+          ) : notifications.map((note) => (
+            <div key={note.id} className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs uppercase tracking-[0.2em] text-slate-500">{note.channel}</span>
+                <span className="text-xs text-slate-500">{note.timestamp ? format(new Date(note.timestamp), 'dd/MM HH:mm') : '—'}</span>
+              </div>
+              <p className="text-sm text-slate-200 whitespace-pre-wrap">{note.message}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Active Trades Table */}

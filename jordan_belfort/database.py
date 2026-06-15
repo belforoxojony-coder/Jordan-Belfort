@@ -173,6 +173,34 @@ class Database:
                 raise
         raise RuntimeError("Conexão com Supabase indisponível para obter trade.")
 
+    # --- Notifications Methods ---
+    def save_notification(self, channel: str, message: str, metadata: Optional[Dict] = None) -> Optional[int]:
+        if self.client:
+            try:
+                payload = {
+                    "timestamp": int(__import__("time").time() * 1000),
+                    "channel": channel,
+                    "message": message,
+                    "metadata": metadata or {}
+                }
+                res = self.client.table("notifications").insert(payload).execute()
+                if res.data:
+                    return res.data[0]["id"]
+            except Exception as e:
+                logger.error(f"Erro ao salvar notificação no Supabase: {e}")
+                raise
+        raise RuntimeError("Conexão com Supabase indisponível para salvar notificação.")
+
+    def get_recent_notifications(self, limit: int = 10) -> List[Dict]:
+        if self.client:
+            try:
+                res = self.client.table("notifications").select("*").order("timestamp", {"ascending": false}).limit(limit).execute()
+                return res.data or []
+            except Exception as e:
+                logger.error(f"Erro ao obter notificações do Supabase: {e}")
+                raise
+        raise RuntimeError("Conexão com Supabase indisponível para obter notificações.")
+
     # --- Audit Logs Methods ---
     def log_audit(self, level: str, message: str, details: Optional[Dict] = None) -> bool:
         import time

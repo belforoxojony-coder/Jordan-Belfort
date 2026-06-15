@@ -81,6 +81,12 @@ class JordanBelfort:
             except:
                 pass
         
+        if self.db:
+            try:
+                self.db.save_notification("telegram", formatted_text)
+            except Exception as e:
+                logger.error(f"Erro ao salvar notificação no banco de dados: {e}")
+
         if not self.app or not self.chat_id:
             logger.debug("Envio de notificação pulado (Telegram desativado).")
             return

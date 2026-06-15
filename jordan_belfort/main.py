@@ -138,7 +138,7 @@ class JordanBelfortSystem:
         }
         
         # Salva o sinal recebido no banco de dados para auditoria histórica
-        self.db.save_signal(
+        signal_id = self.db.save_signal(
             timestamp=payload["timestamp"],
             pair=payload["pair"],
             technical_indicators=payload["technical_indicators"],
@@ -146,6 +146,7 @@ class JordanBelfortSystem:
             social_sentiment=payload["social_sentiment"],
             on_chain_flow=payload["on_chain_flow"]
         )
+        payload["signal_id"] = signal_id
         
         return payload
 
@@ -169,6 +170,10 @@ class JordanBelfortSystem:
 
                     # Verifica se há confluência técnica/social
                     if await self.check_confluence(pair):
+                        await self.jordan.send_notification(
+                            f"CONFLUÊNCIA DETECTADA para {pair}! RSI={self.grafista.get_indicators(pair).get('rsi_15m', 0.0):.2f}, MACD={self.grafista.get_indicators(pair).get('macd_trend', 'neutral')}. Avaliando possibilidade de trade agora...",
+                            format_wolf=True
+                        )
                         # Compila o payload unificado
                         payload = await self.compile_signals_payload(pair)
                         
@@ -183,7 +188,7 @@ class JordanBelfortSystem:
                         self.db.save_decision(
                             timestamp=int(time.time() * 1000),
                             pair=pair,
-                            signal_id=None, # Vinculado via logs se necessário
+                            signal_id=payload.get("signal_id"),
                             decision=decision["decision"],
                             entry_price=decision.get("entry_price"),
                             stop_loss=decision.get("stop_loss"),
@@ -191,6 +196,12 @@ class JordanBelfortSystem:
                             confidence=decision.get("confidence_score"),
                             thesis=decision.get("thesis")
                         )
+
+                        if decision["decision"] == "NEUTRAL":
+                            await self.jordan.send_notification(
+                                f"DECISÃO FINAL para {pair}: NEUTRAL. Nenhuma nova posição será aberta.",
+                                format_wolf=True
+                            )
 
                         if decision["decision"] in ["LONG", "SHORT"]:
                             # Consulta saldo disponível
@@ -235,9 +246,17 @@ class JordanBelfortSystem:
                                 else:
                                     logger.error(f"Executor falhou ao abrir ordem: {exec_msg}")
                                     self.db.log_audit("ERROR", f"Falha na execução da ordem: {exec_msg}")
+                                    await self.jordan.send_notification(
+                                        f"Falha ao abrir ordem para {pair}: {exec_msg}",
+                                        format_wolf=True
+                                    )
                             else:
                                 logger.warning(f"Risco vetou a operação sugerida pelo Estrategista: {reason}")
                                 self.db.log_audit("WARNING", f"Operação vetada pelo Gerente de Risco: {reason}")
+                                await self.jordan.send_notification(
+                                    f"Operação para {pair} vetada pelo Gerente de Risco: {reason}",
+                                    format_wolf=True
+                                )
                 except Exception as e:
                     logger.error(f"Erro no loop de análise de oportunidades para {pair}: {e}")
 
