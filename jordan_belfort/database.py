@@ -207,6 +207,12 @@ class Database:
                     return res.data[0]["id"]
             except Exception as e:
                 logger.error(f"Erro ao salvar sinal no Supabase: {e}")
+                # Ao falhar no Supabase, inicializa/garante o SQLite e usa fallback local
+                self.use_sqlite = True
+                try:
+                    self._init_sqlite()
+                except Exception as ie:
+                    logger.error(f"Erro ao inicializar SQLite após falha do Supabase: {ie}")
                 
         # Fallback para SQLite
         conn = self._get_sqlite_conn()
@@ -252,6 +258,12 @@ class Database:
                     return res.data[0]["id"]
             except Exception as e:
                 logger.error(f"Erro ao salvar decisao no Supabase: {e}")
+                # Ao falhar no Supabase, inicializa/garante o SQLite e usa fallback local
+                self.use_sqlite = True
+                try:
+                    self._init_sqlite()
+                except Exception as ie:
+                    logger.error(f"Erro ao inicializar SQLite após falha do Supabase: {ie}")
 
         # Fallback para SQLite
         conn = self._get_sqlite_conn()
@@ -293,6 +305,12 @@ class Database:
                     return res.data[0]["id"]
             except Exception as e:
                 logger.error(f"Erro ao criar trade no Supabase: {e}")
+                # Ao falhar no Supabase, inicializa/garante o SQLite e usa fallback local
+                self.use_sqlite = True
+                try:
+                    self._init_sqlite()
+                except Exception as ie:
+                    logger.error(f"Erro ao inicializar SQLite após falha do Supabase: {ie}")
 
         # Fallback para SQLite
         conn = self._get_sqlite_conn()
@@ -334,6 +352,12 @@ class Database:
                 return True
             except Exception as e:
                 logger.error(f"Erro ao atualizar trade no Supabase: {e}")
+                # Ao falhar no Supabase, inicializa/garante o SQLite e usa fallback local
+                self.use_sqlite = True
+                try:
+                    self._init_sqlite()
+                except Exception as ie:
+                    logger.error(f"Erro ao inicializar SQLite após falha do Supabase: {ie}")
 
         # Fallback para SQLite
         conn = self._get_sqlite_conn()
@@ -412,6 +436,12 @@ class Database:
                 return True
             except Exception as e:
                 logger.error(f"Erro ao logar auditoria no Supabase: {e}")
+                # Ao falhar no Supabase, inicializa/garante o SQLite e usa fallback local
+                self.use_sqlite = True
+                try:
+                    self._init_sqlite()
+                except Exception as ie:
+                    logger.error(f"Erro ao inicializar SQLite após falha do Supabase: {ie}")
 
         # Fallback para SQLite
         conn = self._get_sqlite_conn()
