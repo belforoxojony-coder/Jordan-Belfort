@@ -24,7 +24,8 @@ class BotConfig:
         self.binance_api_secret = os.getenv("BINANCE_API_SECRET", "").strip()
         raw_use_testnet = os.getenv("BINANCE_USE_TESTNET", "true").lower().strip()
         self.binance_use_testnet = raw_use_testnet != "false"
-        self.binance_testnet_url = os.getenv("BINANCE_TESTNET_URL", "https://testnet.binance.vision/api").strip()
+        # Incluir /v3 para que CCXT acesse endpoints corretos (ex: /api/v3/time)
+        self.binance_testnet_url = os.getenv("BINANCE_TESTNET_URL", "https://testnet.binance.vision/api/v3").strip()
         
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
