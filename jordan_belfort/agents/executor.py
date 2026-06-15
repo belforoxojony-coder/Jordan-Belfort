@@ -39,6 +39,14 @@ class Executor:
                         'recvWindow': 60000,  # Janela de tolerância de timestamp (60 segundos)
                     }
                 }
+                if bot_config.binance_use_testnet:
+                    exchange_options['urls'] = {
+                        'api': {
+                            'public': bot_config.binance_testnet_url,
+                            'private': bot_config.binance_testnet_url
+                        }
+                    }
+
                 self.exchange = ccxt.binance(exchange_options)
                 # Sincroniza o tempo com o servidor da Binance automaticamente
                 self.exchange.load_time_difference()

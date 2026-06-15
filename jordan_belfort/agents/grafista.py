@@ -28,9 +28,15 @@ class Grafista:
                 'defaultType': 'spot'  # Opera no mercado Spot
             }
         }
-        # Como o testnet de Futures da Binance foi desativado/depreciado e é instável,
-        # forçamos o uso dos feeds públicos de produção da Binance para obter dados reais de mercado 24/7.
-        use_sandbox = False
+        use_sandbox = bot_config.binance_use_testnet
+
+        if use_sandbox:
+            exchange_options['urls'] = {
+                'api': {
+                    'public': bot_config.binance_testnet_url,
+                    'private': bot_config.binance_testnet_url
+                }
+            }
 
         self.exchange = ccxtpro.binance(exchange_options)
         self.rest_exchange = ccxt.binance(exchange_options)
@@ -38,7 +44,7 @@ class Grafista:
         if use_sandbox:
             self.exchange.set_sandbox_mode(True)
             self.rest_exchange.set_sandbox_mode(True)
-            logger.info("Grafista operando em Sandbox Mode (Testnet).")
+            logger.info("Grafista operando com dados de Testnet da Binance.")
         else:
             logger.info("Grafista operando com dados de Produção da Binance.")
 

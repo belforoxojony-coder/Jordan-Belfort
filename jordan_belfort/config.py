@@ -18,7 +18,14 @@ class BotConfig:
         # Chaves de API e Variáveis Estáticas (obtidas apenas do .env)
         self.binance_api_key = os.getenv("BINANCE_API_KEY", "").strip()
         self.binance_api_secret = os.getenv("BINANCE_API_SECRET", "").strip()
-        self.binance_use_testnet = os.getenv("BINANCE_USE_TESTNET", "true").lower().strip() == "true"
+        raw_use_testnet = os.getenv("BINANCE_USE_TESTNET", "true").lower().strip()
+        self.binance_use_testnet = raw_use_testnet != "false"
+        if raw_use_testnet == "false":
+            logger.warning(
+                "BINANCE_USE_TESTNET definido como false, mas o modo real da conta NÃO será usado. "
+                "O bot permanece em modo Testnet por segurança."
+            )
+        self.binance_testnet_url = os.getenv("BINANCE_TESTNET_URL", "https://testnet.binance.vision/api").strip()
         
         self.telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         self.telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
