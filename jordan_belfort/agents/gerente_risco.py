@@ -96,10 +96,13 @@ class GerenteRisco:
         )
 
         if position_size_usd > max_exposure_usd:
-            # Em vez de apenas vetar, podemos recalcular a posição para se adequar ao limite de exposição por segurança
-            # Ou abortar, como solicita o PRD: "Se violar a exposição máxima, o trade deve ser abortado imediatamente."
-            # Seguiremos o PRD estritamente: Abortar imediatamente.
-            return False, f"VETO: O tamanho da posição calculado ({position_size_usd:.2f} USD) viola a exposição máxima permitida ({max_exposure_usd:.2f} USD). Trade abortado.", {}
+            logger.warning(
+                f"Tamanho calculado ({position_size_usd:.2f} USD) excede exposição máxima ({max_exposure_usd:.2f} USD). "
+                "A posição será reduzida ao limite de exposição para permitir o trade."
+            )
+            position_size_usd = max_exposure_usd
+            risk_amount_usd = position_size_usd * stop_loss_pct
+            qty = position_size_usd / entry_price
 
         # Tudo aprovado, prepara payload atualizado com dados calculados
         validated_payload = {

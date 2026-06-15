@@ -413,6 +413,14 @@ class JordanBelfortSystem:
                                     f"Lucro/Prejuízo Líquido: {pnl_net:.2f} USD"
                                 )
                                 await self.jordan.send_notification(report, format_wolf=True)
+                            else:
+                                # Se o preço já cruzou SL ou TP, fecha a posição imediatamente por mercado.
+                                if direction == "LONG" and (current_price <= sl or current_price >= tp):
+                                    logger.warning(f"Preço já cruzou limite para LONG em {pair}. Fechando posição de mercado.")
+                                    self.executor.close_trade_at_market(pair, direction, size)
+                                elif direction == "SHORT" and (current_price >= sl or current_price <= tp):
+                                    logger.warning(f"Preço já cruzou limite para SHORT em {pair}. Fechando posição de mercado.")
+                                    self.executor.close_trade_at_market(pair, direction, size)
                         except Exception as e:
                             logger.error(f"Erro ao verificar status real de posições na Binance para {pair}: {e}")
             except Exception as e:

@@ -40,8 +40,8 @@ class BotConfig:
         
         # Cache de Configurações Dinâmicas (para evitar leituras frequentes ao banco)
         self._status = "active"  # Inicia em ATIVO para começar a fazer trades imediatamente
-        self._risk_percentage = 1.0
-        self._max_exposure_percentage = 5.0
+        self._risk_percentage = 0.5
+        self._max_exposure_percentage = 20.0
         self._leverage = 1  # BLOQUEADO EM 1x – alavancagem zero
         
         # Log de diagnóstico das credenciais
@@ -65,8 +65,8 @@ class BotConfig:
         """Lê os parâmetros do banco de dados e atualiza o cache local."""
         try:
             self._status = self.db.get_config("status", "active")
-            self._risk_percentage = float(self.db.get_config("risk_percentage", 1.0))
-            self._max_exposure_percentage = float(self.db.get_config("max_exposure_percentage", 5.0))
+            self._risk_percentage = float(self.db.get_config("risk_percentage", 0.5))
+            self._max_exposure_percentage = float(self.db.get_config("max_exposure_percentage", 20.0))
             # Alavancagem SEMPRE é mantida em 1x. Grava no banco para garantir consistência.
             self._leverage = 1
             self.db.set_config("leverage", 1)
