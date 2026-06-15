@@ -20,7 +20,8 @@ class Database:
     def __init__(self):
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_KEY")
-        self.use_sqlite = os.getenv("USE_SQLITE_FALLBACK", "true").lower() == "true"
+        self.use_sqlite = os.getenv("USE_SQLITE_FALLBACK", "false").lower() == "true"
+
         
         self.client: Optional[Client] = None
         self.sqlite_path = "jordan_belfort.db"
